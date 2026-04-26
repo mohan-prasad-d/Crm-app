@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mini CRM — Dashboard</title>
+  <meta name="description" content="Mini Zoho-style CRM for managing leads, contacts, deals, and tasks.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- ===================== SIDEBAR ===================== -->
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-logo">
+    <span class="logo-icon">💼</span>
+    <span class="logo-text">Mini CRM</span>
+  </div>
+
+  <nav class="sidebar-nav">
+    <a class="nav-item active" data-page="dashboard" onclick="navigate('dashboard')">
+      <span class="nav-icon">📊</span>
+      <span class="nav-label">Dashboard</span>
+    </a>
+    <a class="nav-item" data-page="leads" onclick="navigate('leads')">
+      <span class="nav-icon">🎯</span>
+      <span class="nav-label">Leads</span>
+    </a>
+    <a class="nav-item" data-page="contacts" onclick="navigate('contacts')">
+      <span class="nav-icon">👥</span>
+      <span class="nav-label">Contacts</span>
+    </a>
+    <a class="nav-item" data-page="deals" onclick="navigate('deals')">
+      <span class="nav-icon">💰</span>
+      <span class="nav-label">Deals</span>
+    </a>
+    <a class="nav-item" data-page="tasks" onclick="navigate('tasks')">
+      <span class="nav-icon">✅</span>
+      <span class="nav-label">Tasks</span>
+    </a>
+    <a class="nav-item" data-page="activities" onclick="navigate('activities')">
+      <span class="nav-icon">🕐</span>
+      <span class="nav-label">Activities</span>
+    </a>
+  </nav>
+
+  <div class="sidebar-footer">
+    <div class="user-avatar">A</div>
+    <div class="user-info">
+      <div class="user-name">Admin</div>
+      <div class="user-role">CRM Manager</div>
+    </div>
+  </div>
+</aside>
+
+<!-- ===================== MAIN WRAPPER ===================== -->
+<div class="main-wrapper">
+
+  <!-- TOP HEADER -->
+  <header class="topbar">
+    <button class="sidebar-toggle" onclick="toggleSidebar()">☰</button>
+    <div class="topbar-search">
+      <span>🔍</span>
+      <input type="text" id="global-search" placeholder="Search leads, contacts, deals...">
+    </div>
+    <div class="topbar-actions">
+      <button class="btn btn-primary btn-sm" id="quick-add-btn" onclick="quickAdd()">＋ Quick Add</button>
+      <div class="notif-bell" title="Activities">🔔</div>
+    </div>
+  </header>
+
+  <!-- PAGE CONTENT -->
+  <main class="page-content" id="page-content">
+    <!-- Injected by JS -->
+  </main>
+</div>
+
+<!-- ===================== UNIVERSAL MODAL ===================== -->
+<div class="modal-overlay" id="modal-overlay" onclick="handleModalClick(event)">
+  <div class="modal" id="modal-box">
+    <div class="modal-header">
+      <h2 id="modal-title">Add Record</h2>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body" id="modal-body">
+      <!-- Form injected by JS -->
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast-container" id="toast-container"></div>
+
+<!-- CONFIRM DIALOG -->
+<div id="confirm-overlay" style="display:none" class="confirm-overlay">
+  <div class="confirm-dialog">
+    <div style="font-size:2.5rem;margin-bottom:12px">⚠️</div>
+    <h3 id="confirm-title">Are you sure?</h3>
+    <p id="confirm-msg" style="color:var(--text-secondary);font-size:.88rem;margin:8px 0 24px"></p>
+    <div style="display:flex;gap:12px">
+      <button class="btn btn-secondary" style="flex:1" onclick="closeConfirm()">Cancel</button>
+      <button class="btn btn-danger" style="flex:1" id="confirm-ok-btn">Delete</button>
+    </div>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
