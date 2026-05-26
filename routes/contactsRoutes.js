@@ -1,76 +1,155 @@
 // ============================================
-// CONTACTS ROUTES
+// CONTACTS ROUTES (Enhanced)
 // ============================================
 const express = require('express');
 const router = express.Router();
 const pool = require('../config/db');
+const { authenticate } = require('../middleware/auth');
+const { authorize } = require('../middleware/rbac');
+const { validateContact } = require('../utilities/validator');
+const { logAudit, logActivity } = require('../utilities/auditLog');
+const { createNotification } = require('../utilities/notificationService');
+const { getPaginationParams, buildPaginationResponse } = require('../utilities/pagination');
+const logger = require('../utilities/logger');
 
-router.get('/', async (req, res) => {
+// GET all contacts with pagination and filters
+router.get('/', authenticate, async (req, res, next) => {
   try {
-    const { search } = req.query;
+    const { search, company } = req.query;
+    const { page, limit, offset } = getPaginationParams(req);
+
     let query = 'SELECT * FROM contacts WHERE 1=1';
     const params = [];
+
     if (search) {
       query += ' AND (name LIKE ? OR email LIKE ? OR phone LIKE ? OR company LIKE ?)';
       params.push(`%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`);
     }
-    query += ' ORDER BY created_at DESC';
-    const [rows] = await pool.query(query, params);
-    res.json({ success: true, data: rows, count: rows.length });
+
+    if (company) {
+      query += ' AND company = ?';
+      params.push(company);
+    }
+
+    // Get total count
+    const countQuery = query.replace('SELECT *', 'SELECT COUNT(*) as total');
+    const [countResult] = await pool.query(countQuery, params);
+    const total = countResult[0].total;
+
+    query += ' ORDER BY created_at DESC LIMIT ? OFFSET ?';
+    const [rows] = await pool.query(query, [...params, limit, offset]);
+
+    res.json({
+      success: true,
+      data: rows
+    });
   } catch (e) {
-    res.status(500).json({ success: false, message: e.message });
+    logger.error('Get contacts failed:', e.message);
+    next(e);
   }
 });
 
-router.get('/:id', async (req, res) => {
+// GET single contact
+router.get('/:id', authenticate, async (req, res, next) => {
   try {
-    const [rows] = await pool.query('SELECT * FROM contacts WHERE id=?', [req.params.id]);
-    if (!rows.length) return res.status(404).json({ success: false, message: 'Not found' });
-    res.json({ success: true, data: rows[0] });
+    const [contacts] = await pool.query('SELECT * FROM contacts WHERE id = ?', [req.params.id]);
+    if (!contacts.length) {
+      return res.status(404).json({ success: false, message: 'Contact not found' });
+    }
+
+    // Get related leads and deals
+    const [leads] = await pool.query('SELECT id, name, status FROM leads WHERE company = ?', [contacts[0].company]);
+    const [deals] = await pool.query('SELECT id, title, stage FROM deals WHERE contact_name = ?', [contacts[0].name]);
+
+    res.json({
+      success: true,
+      data: {
+        contact: contacts[0],
+        related_leads: leads,
+        related_deals: deals
+      }
+    });
   } catch (e) {
-    res.status(500).json({ success: false, message: e.message });
+    logger.error('Get contact failed:', e.message);
+    next(e);
   }
 });
 
-router.post('/', async (req, res) => {
+// POST create contact
+router.post('/', authenticate, authorize('contacts', 'create'), async (req, res, next) => {
   try {
     const { name, email, phone, company, title, address } = req.body;
-    if (!name) return res.status(400).json({ success: false, message: 'Name required' });
+
+    const validation = validateContact({ name, email });
+    if (!validation.isValid) {
+      return res.status(400).json({ success: false, errors: validation.errors });
+    }
+
     const [result] = await pool.query(
-      'INSERT INTO contacts (name,email,phone,company,title,address) VALUES (?,?,?,?,?,?)',
-      [name, email, phone, company, title, address]
+      'INSERT INTO contacts (name, email, phone, company, title, address, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [name, email, phone, company, title, address, req.user.userId]
     );
-    await pool.query(
-      'INSERT INTO activities (type,description,module,module_id) VALUES (?,?,?,?)',
-      ['Note', `New contact added: ${name}`, 'contacts', result.insertId]
-    );
-    res.status(201).json({ success: true, message: 'Contact added!', data: { id: result.insertId } });
+
+    await logAudit(req.user.userId, 'CREATE', 'contact', result.insertId, null, { name, email, company }, req);
+    await logActivity(req.user.userId, 'Contact', `New contact created: ${name}`, 'contacts', result.insertId);
+
+    res.status(201).json({
+      success: true,
+      message: 'Contact created successfully',
+      data: { id: result.insertId }
+    });
   } catch (e) {
-    res.status(500).json({ success: false, message: e.message });
+    logger.error('Create contact failed:', e.message);
+    next(e);
   }
 });
 
-router.put('/:id', async (req, res) => {
+// PUT update contact
+router.put('/:id', authenticate, authorize('contacts', 'update'), async (req, res, next) => {
   try {
     const { name, email, phone, company, title, address } = req.body;
+
+    const [oldContact] = await pool.query('SELECT * FROM contacts WHERE id = ?', [req.params.id]);
+    if (!oldContact.length) {
+      return res.status(404).json({ success: false, message: 'Contact not found' });
+    }
+
     const [result] = await pool.query(
-      'UPDATE contacts SET name=?,email=?,phone=?,company=?,title=?,address=? WHERE id=?',
+      'UPDATE contacts SET name=?, email=?, phone=?, company=?, title=?, address=? WHERE id=?',
       [name, email, phone, company, title, address, req.params.id]
     );
-    if (!result.affectedRows) return res.status(404).json({ success: false, message: 'Not found' });
-    res.json({ success: true, message: 'Contact updated!' });
+
+    if (!result.affectedRows) {
+      return res.status(404).json({ success: false, message: 'Contact not found' });
+    }
+
+    await logAudit(req.user.userId, 'UPDATE', 'contact', req.params.id, oldContact[0], { name, email, company }, req);
+    await logActivity(req.user.userId, 'Contact', `Contact updated: ${name}`, 'contacts', req.params.id);
+
+    res.json({ success: true, message: 'Contact updated successfully' });
   } catch (e) {
-    res.status(500).json({ success: false, message: e.message });
+    logger.error('Update contact failed:', e.message);
+    next(e);
   }
 });
 
-router.delete('/:id', async (req, res) => {
+// DELETE contact
+router.delete('/:id', authenticate, authorize('contacts', 'delete'), async (req, res, next) => {
   try {
-    const [result] = await pool.query('DELETE FROM contacts WHERE id=?', [req.params.id]);
-    if (!result.affectedRows) return res.status(404).json({ success: false, message: 'Not found' });
-    res.json({ success: true, message: 'Contact deleted!' });
+    const [contact] = await pool.query('SELECT name FROM contacts WHERE id = ?', [req.params.id]);
+    if (!contact.length) {
+      return res.status(404).json({ success: false, message: 'Contact not found' });
+    }
+
+    await pool.query('DELETE FROM contacts WHERE id = ?', [req.params.id]);
+
+    await logAudit(req.user.userId, 'DELETE', 'contact', req.params.id, contact[0], null, req);
+    await logActivity(req.user.userId, 'Contact', `Contact deleted: ${contact[0].name}`, 'contacts', req.params.id);
+
+    res.json({ success: true, message: 'Contact deleted successfully' });
   } catch (e) {
-    res.status(500).json({ success: false, message: e.message });
+    logger.error('Delete contact failed:', e.message);
+    next(e);
   }
 });
 

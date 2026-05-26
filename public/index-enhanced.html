@@ -1,0 +1,353 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CRM System v2.0 — Dashboard</title>
+    <link rel="stylesheet" href="/style-enhanced.css" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
+  </head>
+  <body>
+    <!-- NAVIGATION & LAYOUT -->
+    <div id="sidebar" class="sidebar">
+      <div class="sidebar-header">
+        <div class="sidebar-logo">💼 CRM v2.0</div>
+        <button class="sidebar-close" onclick="toggleSidebar()">✕</button>
+      </div>
+
+      <nav class="sidebar-nav">
+        <a
+          href="#"
+          onclick="navigate('dashboard')"
+          class="nav-item active"
+          data-page="dashboard"
+        >
+          <span class="nav-icon">📊</span>
+          <span class="nav-label">Dashboard</span>
+        </a>
+        <a
+          href="#"
+          onclick="navigate('leads')"
+          class="nav-item"
+          data-page="leads"
+        >
+          <span class="nav-icon">🎯</span>
+          <span class="nav-label">Leads</span>
+        </a>
+        <a
+          href="#"
+          onclick="navigate('contacts')"
+          class="nav-item"
+          data-page="contacts"
+        >
+          <span class="nav-icon">👥</span>
+          <span class="nav-label">Contacts</span>
+        </a>
+        <a
+          href="#"
+          onclick="navigate('deals')"
+          class="nav-item"
+          data-page="deals"
+        >
+          <span class="nav-icon">💰</span>
+          <span class="nav-label">Deals</span>
+        </a>
+        <a
+          href="#"
+          onclick="navigate('kanban')"
+          class="nav-item"
+          data-page="kanban"
+        >
+          <span class="nav-icon">📋</span>
+          <span class="nav-label">Kanban</span>
+        </a>
+        <a
+          href="#"
+          onclick="navigate('tasks')"
+          class="nav-item"
+          data-page="tasks"
+        >
+          <span class="nav-icon">✓</span>
+          <span class="nav-label">Tasks</span>
+        </a>
+        <a
+          href="#"
+          onclick="navigate('activities')"
+          class="nav-item"
+          data-page="activities"
+        >
+          <span class="nav-icon">📝</span>
+          <span class="nav-label">Activities</span>
+        </a>
+        <a
+          href="#"
+          onclick="navigate('notifications')"
+          class="nav-item"
+          data-page="notifications"
+        >
+          <span class="nav-icon">🔔</span>
+          <span class="nav-label">Notifications</span>
+        </a>
+
+        <div class="nav-divider"></div>
+
+        <a href="#" onclick="alert('Settings coming soon')" class="nav-item">
+          <span class="nav-icon">⚙️</span>
+          <span class="nav-label">Settings</span>
+        </a>
+        <a href="#" onclick="logout()" class="nav-item nav-danger">
+          <span class="nav-icon">🚪</span>
+          <span class="nav-label">Logout</span>
+        </a>
+      </nav>
+    </div>
+
+    <div class="main-wrapper">
+      <!-- TOP BAR -->
+      <div class="topbar">
+        <button class="sidebar-toggle" onclick="toggleSidebar()">☰</button>
+
+        <div class="topbar-title">
+          <h2 id="topbar-title">Dashboard</h2>
+        </div>
+
+        <div class="topbar-spacer"></div>
+
+        <button class="topbar-icon" onclick="navigate('notifications')">
+          <span
+            class="notification-badge"
+            id="unread-count"
+            style="display: none"
+            >1</span
+          >
+          🔔
+        </button>
+
+        <div class="user-menu">
+          <div id="user-name">User</div>
+          <div id="user-role" class="user-role">Employee</div>
+        </div>
+      </div>
+
+      <!-- PAGE CONTENT -->
+      <div class="page-content" id="page-content">
+        <!-- Rendered by app.js -->
+      </div>
+    </div>
+
+    <!-- MODALS & OVERLAYS -->
+    <div
+      class="modal-overlay"
+      id="modal-overlay"
+      onclick="handleModalClick(event)"
+    >
+      <div class="modal" id="modal-box">
+        <div class="modal-header">
+          <h2 id="modal-title">Modal Title</h2>
+          <button class="modal-close" onclick="closeModal()">✕</button>
+        </div>
+        <div class="modal-body" id="modal-body">
+          <!-- Content loaded by JS -->
+        </div>
+      </div>
+    </div>
+
+    <!-- CONFIRMATION DIALOG -->
+    <div class="confirm-overlay" id="confirm-overlay">
+      <div class="confirm-dialog">
+        <h3 id="confirm-title">Confirm</h3>
+        <p id="confirm-msg">Are you sure?</p>
+        <div style="display: flex; gap: 12px; margin-top: 24px">
+          <button
+            class="btn btn-secondary"
+            style="flex: 1"
+            onclick="closeConfirm()"
+          >
+            Cancel
+          </button>
+          <button class="btn btn-danger" style="flex: 1" id="confirm-ok-btn">
+            Confirm
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- TOAST CONTAINER -->
+    <div class="toast-container" id="toast-container"></div>
+
+    <!-- SIDEBAR STYLES (not in separate CSS for simplicity) -->
+    <style>
+      .sidebar {
+        position: fixed;
+        left: 0;
+        top: 0;
+        width: var(--sidebar-w);
+        height: 100vh;
+        background: var(--bg2);
+        border-right: 1px solid var(--border);
+        display: flex;
+        flex-direction: column;
+        z-index: 999;
+        transition: transform 0.3s;
+      }
+
+      .sidebar-header {
+        padding: 20px;
+        border-bottom: 1px solid var(--border);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      .sidebar-logo {
+        font-size: 1.1rem;
+        font-weight: 700;
+        color: var(--text);
+      }
+
+      .sidebar-close {
+        display: none;
+        background: none;
+        border: none;
+        color: var(--text);
+        font-size: 1.3rem;
+        cursor: pointer;
+      }
+
+      .sidebar-nav {
+        flex: 1;
+        overflow-y: auto;
+        padding: 12px;
+      }
+
+      .nav-item {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 12px 16px;
+        margin-bottom: 8px;
+        color: var(--text3);
+        text-decoration: none;
+        border-radius: var(--r);
+        transition: all 0.2s;
+      }
+
+      .nav-item:hover {
+        background: var(--bg3);
+        color: var(--text);
+      }
+
+      .nav-item.active {
+        background: linear-gradient(
+          135deg,
+          rgba(79, 124, 255, 0.2) 0%,
+          rgba(139, 107, 255, 0.1) 100%
+        );
+        color: var(--blue);
+        border-left: 3px solid var(--blue);
+        padding-left: 13px;
+      }
+
+      .nav-item.nav-danger:hover {
+        background: var(--red-soft);
+        color: var(--red);
+      }
+
+      .nav-icon {
+        font-size: 1.2rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .nav-divider {
+        height: 1px;
+        background: var(--border);
+        margin: 12px 0;
+      }
+
+      /* Topbar */
+      .topbar-title h2 {
+        font-size: 1.3rem;
+        margin: 0;
+      }
+
+      .topbar-spacer {
+        flex: 1;
+      }
+
+      .topbar-icon {
+        background: none;
+        border: none;
+        color: var(--text);
+        font-size: 1.3rem;
+        cursor: pointer;
+        padding: 8px;
+        position: relative;
+      }
+
+      .notification-badge {
+        position: absolute;
+        top: 0;
+        right: 0;
+        background: var(--red);
+        color: white;
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        font-size: 0.7rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .user-menu {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 2px;
+      }
+
+      #user-name {
+        font-weight: 600;
+        font-size: 0.95rem;
+      }
+
+      .user-role {
+        color: var(--text3);
+        font-size: 0.8rem;
+      }
+
+      .sidebar-toggle {
+        display: none;
+        background: none;
+        border: none;
+        color: var(--text);
+        font-size: 1.3rem;
+        cursor: pointer;
+      }
+
+      /* Mobile */
+      @media (max-width: 768px) {
+        .sidebar {
+          transform: translateX(-100%);
+        }
+
+        .sidebar.open {
+          transform: translateX(0);
+        }
+
+        .sidebar-close {
+          display: block;
+        }
+
+        .sidebar-toggle {
+          display: block !important;
+        }
+      }
+    </style>
+
+    <!-- MAIN APP SCRIPT -->
+    <script src="/app-enhanced.js"></script>
+  </body>
+</html>

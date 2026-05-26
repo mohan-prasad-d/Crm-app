@@ -11,14 +11,15 @@ require('dotenv').config();
 
 // Create a connection pool using our .env settings
 const pool = mysql.createPool({
-  host: process.env.DB_HOST,       // Where MySQL is running (localhost)
-  user: process.env.DB_USER,       // MySQL username (usually "root")
-  password: process.env.DB_PASSWORD, // MySQL password
-  database: process.env.DB_NAME,   // The database name we'll use
-  port: process.env.DB_PORT,       // MySQL port (default: 3306)
-  waitForConnections: true,        // Wait if all connections are busy
-  connectionLimit: 10,             // Max 10 simultaneous connections
-  queueLimit: 0                    // No limit on waiting requests
+  host: process.env.DB_HOST,
+  user: process.env.DB_USER,
+  password: process.env.DB_PASSWORD,
+  database: process.env.DB_NAME,
+  port: process.env.DB_PORT,
+  waitForConnections: true,
+  connectionLimit: 10,
+  queueLimit: 0,
+  dateStrings: true // Important: returns dates as strings to avoid timezone shifts
 });
 
 // Export the pool so other files can use it

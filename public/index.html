@@ -1,111 +1,727 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Mini CRM — Dashboard</title>
-  <meta name="description" content="Mini Zoho-style CRM for managing leads, contacts, deals, and tasks.">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <link rel="stylesheet" href="style.css">
-</head>
-<body>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Mini CRM — Dashboard</title>
+    <meta
+      name="description"
+      content="Mini Zoho-style CRM for managing leads, contacts, deals, and tasks."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="style.css" />
+    <style>
+      #auth-screen {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: #0b0d13;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        z-index: 10000;
+        overflow: hidden;
+        font-family: "Inter", sans-serif;
+      }
 
-<!-- ===================== SIDEBAR ===================== -->
-<aside class="sidebar" id="sidebar">
-  <div class="sidebar-logo">
-    <span class="logo-icon">💼</span>
-    <span class="logo-text">Mini CRM</span>
-  </div>
+      /* Moving Mesh Gradients */
+      .mesh-gradients {
+        position: absolute;
+        width: 100%;
+        height: 100%;
+        top: 0;
+        left: 0;
+        z-index: 1;
+        overflow: hidden;
+        opacity: 0.7;
+      }
 
-  <nav class="sidebar-nav">
-    <a class="nav-item active" data-page="dashboard" onclick="navigate('dashboard')">
-      <span class="nav-icon">📊</span>
-      <span class="nav-label">Dashboard</span>
-    </a>
-    <a class="nav-item" data-page="leads" onclick="navigate('leads')">
-      <span class="nav-icon">🎯</span>
-      <span class="nav-label">Leads</span>
-    </a>
-    <a class="nav-item" data-page="contacts" onclick="navigate('contacts')">
-      <span class="nav-icon">👥</span>
-      <span class="nav-label">Contacts</span>
-    </a>
-    <a class="nav-item" data-page="deals" onclick="navigate('deals')">
-      <span class="nav-icon">💰</span>
-      <span class="nav-label">Deals</span>
-    </a>
-    <a class="nav-item" data-page="tasks" onclick="navigate('tasks')">
-      <span class="nav-icon">✅</span>
-      <span class="nav-label">Tasks</span>
-    </a>
-    <a class="nav-item" data-page="activities" onclick="navigate('activities')">
-      <span class="nav-icon">🕐</span>
-      <span class="nav-label">Activities</span>
-    </a>
-  </nav>
+      .mesh-blob {
+        position: absolute;
+        border-radius: 50%;
+        filter: blur(120px);
+        mix-blend-mode: screen;
+        animation: floatAround 25s infinite alternate ease-in-out;
+      }
 
-  <div class="sidebar-footer">
-    <div class="user-avatar">A</div>
-    <div class="user-info">
-      <div class="user-name">Admin</div>
-      <div class="user-role">CRM Manager</div>
+      .blob-1 {
+        top: -10%;
+        left: -10%;
+        width: 50vw;
+        height: 50vw;
+        background: radial-gradient(
+          circle,
+          rgba(79, 124, 255, 0.4) 0%,
+          transparent 70%
+        );
+        animation-duration: 20s;
+      }
+
+      .blob-2 {
+        bottom: -10%;
+        right: -10%;
+        width: 60vw;
+        height: 60vw;
+        background: radial-gradient(
+          circle,
+          rgba(139, 107, 255, 0.3) 0%,
+          transparent 70%
+        );
+        animation-duration: 28s;
+        animation-delay: -5s;
+      }
+
+      .blob-3 {
+        top: 40%;
+        left: 30%;
+        width: 45vw;
+        height: 45vw;
+        background: radial-gradient(
+          circle,
+          rgba(6, 182, 212, 0.25) 0%,
+          transparent 70%
+        );
+        animation-duration: 24s;
+        animation-delay: -10s;
+      }
+
+      @keyframes floatAround {
+        0% {
+          transform: translate(0, 0) scale(1);
+        }
+        50% {
+          transform: translate(5vw, 5vh) scale(1.1);
+        }
+        100% {
+          transform: translate(-5vw, -5vh) scale(0.95);
+        }
+      }
+
+      .auth-container {
+        position: relative;
+        z-index: 2;
+        background: rgba(22, 27, 39, 0.7);
+        backdrop-filter: blur(24px);
+        -webkit-backdrop-filter: blur(24px);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 20px;
+        padding: 40px 32px;
+        width: 90%;
+        max-width: 420px;
+        box-shadow:
+          0 30px 60px rgba(0, 0, 0, 0.4),
+          0 0 100px rgba(79, 124, 255, 0.05);
+        transition:
+          transform 0.3s ease,
+          opacity 0.3s ease;
+      }
+
+      .auth-header {
+        text-align: center;
+        margin-bottom: 24px;
+      }
+
+      .auth-logo {
+        font-size: 2.2rem;
+        margin-bottom: 12px;
+        display: inline-block;
+      }
+
+      .auth-title {
+        font-size: 1.6rem;
+        font-weight: 800;
+        background: linear-gradient(135deg, #ffffff, #8b9cc8);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        margin-bottom: 8px;
+      }
+
+      .auth-subtitle {
+        color: #8b9cc8;
+        font-size: 0.88rem;
+        font-weight: 400;
+      }
+
+      .auth-tabs {
+        display: flex;
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        border-radius: 12px;
+        padding: 4px;
+        margin-bottom: 24px;
+      }
+
+      .auth-tab {
+        flex: 1;
+        background: transparent;
+        border: none;
+        color: #8b9cc8;
+        font-size: 0.88rem;
+        font-weight: 600;
+        padding: 10px;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: all 0.25s ease;
+      }
+
+      .auth-tab:hover {
+        color: #f0f4ff;
+      }
+
+      .auth-tab.active {
+        background: linear-gradient(135deg, var(--blue), var(--purple));
+        color: #ffffff;
+        box-shadow: 0 4px 12px rgba(79, 124, 255, 0.3);
+      }
+
+      .auth-form {
+        display: none;
+        flex-direction: column;
+        gap: 16px;
+        opacity: 0;
+        transform: translateY(10px);
+        transition:
+          opacity 0.3s ease,
+          transform 0.3s ease;
+      }
+
+      .auth-form.active {
+        display: flex;
+        opacity: 1;
+        transform: translateY(0);
+      }
+
+      .form-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+      }
+
+      .auth-group {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        position: relative;
+      }
+
+      .auth-group label {
+        font-size: 0.75rem;
+        font-weight: 700;
+        color: #566380;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+
+      .input-wrapper {
+        position: relative;
+        display: flex;
+        align-items: center;
+      }
+
+      .input-icon {
+        position: absolute;
+        left: 14px;
+        font-size: 0.95rem;
+        color: #566380;
+        pointer-events: none;
+        transition: color 0.2s;
+      }
+
+      .auth-input {
+        width: 100%;
+        padding: 12px 14px 12px 40px;
+        background: rgba(28, 35, 55, 0.5);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 10px;
+        color: #f0f4ff;
+        font-family: inherit;
+        font-size: 0.88rem;
+        outline: none;
+        transition: all 0.2s ease;
+      }
+
+      .auth-input::placeholder {
+        color: #566380;
+      }
+
+      .auth-input:focus {
+        border-color: var(--blue);
+        background: rgba(28, 35, 55, 0.8);
+        box-shadow: 0 0 0 3px rgba(79, 124, 255, 0.2);
+      }
+
+      .auth-input:focus + .input-icon {
+        color: var(--blue);
+      }
+
+      .auth-select {
+        width: 100%;
+        padding: 12px 14px;
+        background: rgba(28, 35, 55, 0.5);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 10px;
+        color: #f0f4ff;
+        font-family: inherit;
+        font-size: 0.88rem;
+        outline: none;
+        cursor: pointer;
+        appearance: none;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' fill='%23566380' viewBox='0 0 16 16'%3E%3Cpath d='M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z'/%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: right 14px center;
+        background-size: 10px;
+        padding-right: 36px;
+        transition: all 0.2s;
+      }
+
+      .auth-select:focus {
+        border-color: var(--blue);
+        box-shadow: 0 0 0 3px rgba(79, 124, 255, 0.2);
+      }
+
+      .auth-select option {
+        background: #161b27;
+        color: #f0f4ff;
+      }
+
+      .validation-msg {
+        font-size: 0.72rem;
+        margin-top: 4px;
+        color: var(--red);
+        display: none;
+      }
+
+      .auth-submit-btn {
+        width: 100%;
+        padding: 13px;
+        background: linear-gradient(135deg, var(--blue), var(--purple));
+        color: #ffffff;
+        border: none;
+        border-radius: 10px;
+        font-weight: 700;
+        font-size: 0.9rem;
+        cursor: pointer;
+        box-shadow: 0 4px 14px rgba(79, 124, 255, 0.3);
+        transition: all 0.25s ease;
+        margin-top: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+      }
+
+      .auth-submit-btn:hover:not(:disabled) {
+        transform: translateY(-1.5px);
+        box-shadow: 0 6px 20px rgba(79, 124, 255, 0.4);
+      }
+
+      .auth-submit-btn:active:not(:disabled) {
+        transform: translateY(0);
+      }
+
+      .auth-submit-btn:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+
+      .demo-note {
+        text-align: center;
+        color: #566380;
+        font-size: 0.78rem;
+        margin-top: 16px;
+        padding-top: 16px;
+        border-top: 1px solid rgba(255, 255, 255, 0.05);
+      }
+
+      .demo-note code {
+        background: rgba(255, 255, 255, 0.05);
+        padding: 2px 5px;
+        border-radius: 4px;
+        color: #8b9cc8;
+      }
+
+      .password-meter {
+        height: 4px;
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 2px;
+        margin-top: 6px;
+        overflow: hidden;
+        display: none;
+      }
+
+      .password-meter-bar {
+        height: 100%;
+        width: 0;
+        background: var(--red);
+        transition:
+          width 0.3s,
+          background-color 0.3s;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- ===================== LOGIN SCREEN ===================== -->
+    <div id="auth-screen">
+      <div class="mesh-gradients">
+        <div class="mesh-blob blob-1"></div>
+        <div class="mesh-blob blob-2"></div>
+        <div class="mesh-blob blob-3"></div>
+      </div>
+
+      <div class="auth-container">
+        <div class="auth-header">
+          <div class="auth-logo">💼</div>
+          <h1 class="auth-title">Enhanced CRM</h1>
+          <p class="auth-subtitle">
+            Grow your business relationships professionally
+          </p>
+        </div>
+
+        <div class="auth-tabs">
+          <button
+            type="button"
+            class="auth-tab active"
+            id="tab-login"
+            onclick="switchAuthTab('login')"
+          >
+            Sign In
+          </button>
+          <button
+            type="button"
+            class="auth-tab"
+            id="tab-signup"
+            onclick="switchAuthTab('signup')"
+          >
+            Sign Up
+          </button>
+        </div>
+
+        <!-- LOGIN FORM -->
+        <form id="login-form" class="auth-form active">
+          <div class="auth-group">
+            <label for="username">Username</label>
+            <div class="input-wrapper">
+              <input
+                type="text"
+                id="username"
+                class="auth-input"
+                placeholder="Enter your username"
+                required
+              />
+              <span class="input-icon">👤</span>
+            </div>
+          </div>
+          <div class="auth-group">
+            <label for="password">Password</label>
+            <div class="input-wrapper">
+              <input
+                type="password"
+                id="password"
+                class="auth-input"
+                placeholder="Enter your password"
+                required
+              />
+              <span class="input-icon">🔒</span>
+            </div>
+          </div>
+          <button type="submit" class="auth-submit-btn">Sign In</button>
+          <p class="demo-note">
+            Demo Admin: <code>admin</code> / <code>password123</code>
+          </p>
+        </form>
+
+        <!-- SIGNUP FORM -->
+        <form id="signup-form" class="auth-form">
+          <div class="form-row">
+            <div class="auth-group">
+              <label for="signup-first-name">First Name</label>
+              <input
+                type="text"
+                id="signup-first-name"
+                class="auth-input"
+                style="padding-left: 14px"
+                placeholder="First Name"
+              />
+            </div>
+            <div class="auth-group">
+              <label for="signup-last-name">Last Name</label>
+              <input
+                type="text"
+                id="signup-last-name"
+                class="auth-input"
+                style="padding-left: 14px"
+                placeholder="Last Name"
+              />
+            </div>
+          </div>
+          <div class="auth-group">
+            <label for="signup-username">Username *</label>
+            <div class="input-wrapper">
+              <input
+                type="text"
+                id="signup-username"
+                class="auth-input"
+                placeholder="Choose a username"
+                required
+                minlength="3"
+              />
+              <span class="input-icon">👤</span>
+            </div>
+          </div>
+          <div class="auth-group">
+            <label for="signup-email">Email Address *</label>
+            <div class="input-wrapper">
+              <input
+                type="email"
+                id="signup-email"
+                class="auth-input"
+                placeholder="name@company.com"
+                required
+              />
+              <span class="input-icon">✉️</span>
+            </div>
+          </div>
+          <div class="auth-group">
+            <label for="signup-password">Password *</label>
+            <div class="input-wrapper">
+              <input
+                type="password"
+                id="signup-password"
+                class="auth-input"
+                placeholder="Min. 6 characters"
+                required
+                minlength="6"
+              />
+              <span class="input-icon">🔒</span>
+            </div>
+            <div class="password-meter" id="signup-pw-meter">
+              <div class="password-meter-bar" id="signup-pw-bar"></div>
+            </div>
+          </div>
+          <div class="auth-group">
+            <label for="signup-role">Role</label>
+            <select id="signup-role" class="auth-select">
+              <option value="Employee">Employee (Standard Access)</option>
+              <option value="Manager">Manager (Extended Access)</option>
+              <option value="Admin">Admin (Full Control)</option>
+            </select>
+          </div>
+          <button type="submit" class="auth-submit-btn">Create Account</button>
+        </form>
+      </div>
     </div>
-  </div>
-</aside>
 
-<!-- ===================== MAIN WRAPPER ===================== -->
-<div class="main-wrapper">
+    <!-- ===================== MAIN APP ===================== -->
+    <div id="app" style="display: none">
+      <!-- ===================== SIDEBAR ===================== -->
+      <aside class="sidebar" id="sidebar">
+        <div class="sidebar-logo">
+          <span class="logo-icon">💼</span>
+          <span class="logo-text">Mini CRM</span>
+        </div>
 
-  <!-- TOP HEADER -->
-  <header class="topbar">
-    <button class="sidebar-toggle" onclick="toggleSidebar()">☰</button>
-    <div class="topbar-search">
-      <span>🔍</span>
-      <input type="text" id="global-search" placeholder="Search leads, contacts, deals...">
+        <nav class="sidebar-nav">
+          <a
+            class="nav-item active"
+            data-page="dashboard"
+            onclick="navigate('dashboard')"
+          >
+            <span class="nav-icon">📊</span>
+            <span class="nav-label">Dashboard</span>
+          </a>
+          <a class="nav-item" data-page="leads" onclick="navigate('leads')">
+            <span class="nav-icon">🎯</span>
+            <span class="nav-label">Leads</span>
+          </a>
+          <a
+            class="nav-item"
+            data-page="contacts"
+            onclick="navigate('contacts')"
+          >
+            <span class="nav-icon">👥</span>
+            <span class="nav-label">Contacts</span>
+          </a>
+          <a class="nav-item" data-page="deals" onclick="navigate('deals')">
+            <span class="nav-icon">💰</span>
+            <span class="nav-label">Deals</span>
+          </a>
+          <a class="nav-item" data-page="tasks" onclick="navigate('tasks')">
+            <span class="nav-icon">✅</span>
+            <span class="nav-label">Tasks</span>
+          </a>
+          <a
+            class="nav-item"
+            data-page="activities"
+            onclick="navigate('activities')"
+          >
+            <span class="nav-icon">🕐</span>
+            <span class="nav-label">Activities</span>
+          </a>
+        </nav>
+
+        <div
+          class="sidebar-footer"
+          style="
+            flex-direction: column;
+            align-items: stretch;
+            gap: 8px;
+            padding: 16px 12px;
+          "
+        >
+          <div style="display: flex; align-items: center; gap: 12px">
+            <div class="user-avatar" id="sidebar-user-avatar">A</div>
+            <div class="user-info" style="flex: 1; min-width: 0">
+              <div
+                class="user-name"
+                id="sidebar-user-name"
+                style="
+                  white-space: nowrap;
+                  overflow: hidden;
+                  text-overflow: ellipsis;
+                "
+              >
+                Admin
+              </div>
+              <div class="user-role" id="sidebar-user-role">CRM Manager</div>
+            </div>
+          </div>
+          <button
+            onclick="logout()"
+            class="btn btn-danger btn-sm"
+            style="width: 100%; padding: 8px; justify-content: center"
+          >
+            🚪 Logout
+          </button>
+        </div>
+      </aside>
+
+      <!-- ===================== MAIN WRAPPER ===================== -->
+      <div class="main-wrapper">
+        <!-- TOP HEADER -->
+        <header class="topbar">
+          <button class="sidebar-toggle" onclick="toggleSidebar()">☰</button>
+          <div class="topbar-search">
+            <span>🔍</span>
+            <input
+              type="text"
+              id="global-search"
+              placeholder="Search leads, contacts, deals..."
+            />
+          </div>
+          <div class="topbar-actions">
+            <button
+              class="btn btn-primary btn-sm"
+              id="quick-add-btn"
+              onclick="quickAdd()"
+            >
+              ＋ Quick Add
+            </button>
+            <div class="notif-bell-container">
+              <button
+                class="notif-bell"
+                title="Notifications"
+                onclick="toggleNotificationPanel()"
+              >
+                🔔<span
+                  class="notif-badge"
+                  id="notif-badge"
+                  style="display: none"
+                  >0</span
+                >
+              </button>
+              <div
+                class="notification-panel"
+                id="notification-panel"
+                style="display: none"
+              >
+                <div class="notification-header">
+                  <h3>Notifications</h3>
+                  <button
+                    class="btn-text"
+                    onclick="markAllNotificationsAsRead()"
+                    style="font-size: 0.75rem"
+                  >
+                    Mark all read
+                  </button>
+                </div>
+                <div class="notification-list" id="notification-list">
+                  <div
+                    style="
+                      padding: 20px;
+                      text-align: center;
+                      color: var(--text-secondary);
+                    "
+                  >
+                    Loading...
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </header>
+
+        <!-- PAGE CONTENT -->
+        <main class="page-content" id="page-content">
+          <!-- Injected by JS -->
+        </main>
+      </div>
     </div>
-    <div class="topbar-actions">
-      <button class="btn btn-primary btn-sm" id="quick-add-btn" onclick="quickAdd()">＋ Quick Add</button>
-      <div class="notif-bell" title="Activities">🔔</div>
+
+    <!-- ===================== UNIVERSAL MODAL ===================== -->
+    <div
+      class="modal-overlay"
+      id="modal-overlay"
+      onclick="handleModalClick(event)"
+    >
+      <div class="modal" id="modal-box">
+        <div class="modal-header">
+          <h2 id="modal-title">Add Record</h2>
+          <button class="modal-close" onclick="closeModal()">✕</button>
+        </div>
+        <div class="modal-body" id="modal-body">
+          <!-- Form injected by JS -->
+        </div>
+      </div>
     </div>
-  </header>
 
-  <!-- PAGE CONTENT -->
-  <main class="page-content" id="page-content">
-    <!-- Injected by JS -->
-  </main>
-</div>
+    <!-- TOAST -->
+    <div class="toast-container" id="toast-container"></div>
 
-<!-- ===================== UNIVERSAL MODAL ===================== -->
-<div class="modal-overlay" id="modal-overlay" onclick="handleModalClick(event)">
-  <div class="modal" id="modal-box">
-    <div class="modal-header">
-      <h2 id="modal-title">Add Record</h2>
-      <button class="modal-close" onclick="closeModal()">✕</button>
+    <!-- CONFIRM DIALOG -->
+    <div id="confirm-overlay" style="display: none" class="confirm-overlay">
+      <div class="confirm-dialog">
+        <div style="font-size: 2.5rem; margin-bottom: 12px">⚠️</div>
+        <h3 id="confirm-title">Are you sure?</h3>
+        <p
+          id="confirm-msg"
+          style="
+            color: var(--text-secondary);
+            font-size: 0.88rem;
+            margin: 8px 0 24px;
+          "
+        ></p>
+        <div style="display: flex; gap: 12px">
+          <button
+            class="btn btn-secondary"
+            style="flex: 1"
+            onclick="closeConfirm()"
+          >
+            Cancel
+          </button>
+          <button class="btn btn-danger" style="flex: 1" id="confirm-ok-btn">
+            Delete
+          </button>
+        </div>
+      </div>
     </div>
-    <div class="modal-body" id="modal-body">
-      <!-- Form injected by JS -->
-    </div>
-  </div>
-</div>
 
-<!-- TOAST -->
-<div class="toast-container" id="toast-container"></div>
-
-<!-- CONFIRM DIALOG -->
-<div id="confirm-overlay" style="display:none" class="confirm-overlay">
-  <div class="confirm-dialog">
-    <div style="font-size:2.5rem;margin-bottom:12px">⚠️</div>
-    <h3 id="confirm-title">Are you sure?</h3>
-    <p id="confirm-msg" style="color:var(--text-secondary);font-size:.88rem;margin:8px 0 24px"></p>
-    <div style="display:flex;gap:12px">
-      <button class="btn btn-secondary" style="flex:1" onclick="closeConfirm()">Cancel</button>
-      <button class="btn btn-danger" style="flex:1" id="confirm-ok-btn">Delete</button>
-    </div>
-  </div>
-</div>
-
-<script src="app.js"></script>
-</body>
+    <script src="app.js"></script>
+  </body>
 </html>

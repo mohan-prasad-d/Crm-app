@@ -13,10 +13,296 @@ let editingId = null;
 let editingModule = null;
 let chartInstances = {};
 let confirmCallback = null;
+let authToken = null;
+let currentUser = null;
+let notificationPanelOpen = false;
+let notifications = [];
+let notificationCheckInterval = null;
 
 // ============================================================
 // ROUTER
 // ============================================================
+function showLoginPage() {
+  const app = document.getElementById('app');
+  const authScreen = document.getElementById('auth-screen');
+  
+  if (authScreen) {
+    authScreen.style.display = 'flex';
+  }
+  
+  if (app) {
+    app.style.display = 'none';
+  }
+  
+  // Setup login form
+  const loginForm = document.getElementById('login-form');
+  if (loginForm) {
+    loginForm.onsubmit = handleLogin;
+    loginForm.reset();
+    
+    const usernameField = document.getElementById('username');
+    if (usernameField) {
+      setTimeout(() => usernameField.focus(), 100);
+    }
+  }
+
+  // Setup signup form
+  const signupForm = document.getElementById('signup-form');
+  if (signupForm) {
+    signupForm.onsubmit = handleSignup;
+    signupForm.reset();
+
+    // Password strength indicator
+    const passwordInput = document.getElementById('signup-password');
+    const pwMeter = document.getElementById('signup-pw-meter');
+    const pwBar = document.getElementById('signup-pw-bar');
+    if (passwordInput && pwMeter && pwBar) {
+      passwordInput.addEventListener('input', () => {
+        const val = passwordInput.value;
+        if (val.length === 0) {
+          pwMeter.style.display = 'none';
+          return;
+        }
+        pwMeter.style.display = 'block';
+        
+        let strength = 0;
+        if (val.length >= 6) strength += 20;
+        if (val.length >= 10) strength += 20;
+        if (/[A-Z]/.test(val)) strength += 20;
+        if (/[0-9]/.test(val)) strength += 20;
+        if (/[^A-Za-z0-9]/.test(val)) strength += 20;
+        
+        pwBar.style.width = strength + '%';
+        if (strength < 40) {
+          pwBar.style.backgroundColor = '#ef4444'; // Red
+        } else if (strength < 80) {
+          pwBar.style.backgroundColor = '#f59e0b'; // Amber
+        } else {
+          pwBar.style.backgroundColor = '#22c55e'; // Green
+        }
+      });
+    }
+  }
+
+  // Default to login tab
+  switchAuthTab('login');
+}
+
+function switchAuthTab(tab) {
+  const tabLogin = document.getElementById('tab-login');
+  const tabSignup = document.getElementById('tab-signup');
+  const loginForm = document.getElementById('login-form');
+  const signupForm = document.getElementById('signup-form');
+
+  if (tab === 'login') {
+    if (tabLogin) tabLogin.classList.add('active');
+    if (tabSignup) tabSignup.classList.remove('active');
+    if (loginForm) loginForm.classList.add('active');
+    if (signupForm) signupForm.classList.remove('active');
+    
+    const usernameField = document.getElementById('username');
+    if (usernameField) setTimeout(() => usernameField.focus(), 50);
+  } else {
+    if (tabLogin) tabLogin.classList.remove('active');
+    if (tabSignup) tabSignup.classList.add('active');
+    if (loginForm) loginForm.classList.remove('active');
+    if (signupForm) signupForm.classList.add('active');
+    
+    const signupFirstName = document.getElementById('signup-first-name');
+    if (signupFirstName) setTimeout(() => signupFirstName.focus(), 50);
+  }
+}
+
+async function showAppPage() {
+  const authScreen = document.getElementById('auth-screen');
+  const app = document.getElementById('app');
+  
+  if (authScreen) {
+    authScreen.style.display = 'none';
+  }
+  
+  if (app) {
+    app.style.display = 'flex';
+    app.style.width = '100%';
+    app.style.height = '100%';
+  }
+  
+  // Initialize global search now that #app is visible
+  initGlobalSearch();
+
+  // Ensure we load/update sidebar info
+  if (authToken && !currentUser) {
+    await loadCurrentUser();
+  } else {
+    updateSidebarUser();
+  }
+  
+  // Start notification polling
+  startNotificationPolling();
+  
+  navigate('dashboard');
+}
+
+async function handleLogin(e) {
+  e.preventDefault();
+  
+  const username = document.getElementById('username')?.value?.trim();
+  const password = document.getElementById('password')?.value;
+  const button = e.target.querySelector('button[type="submit"]');
+  
+  if (!username || !password) {
+    showToast('Please enter username and password', 'error');
+    return;
+  }
+  
+  if (button) button.disabled = true;
+  
+  try {
+    const res = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password })
+    });
+    
+    const data = await res.json();
+    
+    if (res.ok && data.token) {
+      authToken = data.token;
+      localStorage.setItem('authToken', authToken);
+      currentUser = data.user || { username };
+      showToast('✅ Logged in successfully!', 'success');
+      setTimeout(() => showAppPage(), 500);
+    } else {
+      showToast('❌ ' + (data.message || 'Invalid credentials'), 'error');
+    }
+  } catch (err) {
+    console.error('Login error:', err);
+    showToast('❌ Login error: ' + err.message, 'error');
+  } finally {
+    if (button) button.disabled = false;
+  }
+}
+
+async function handleSignup(e) {
+  e.preventDefault();
+
+  const first_name = document.getElementById('signup-first-name')?.value?.trim();
+  const last_name = document.getElementById('signup-last-name')?.value?.trim();
+  const username = document.getElementById('signup-username')?.value?.trim();
+  const email = document.getElementById('signup-email')?.value?.trim();
+  const password = document.getElementById('signup-password')?.value;
+  const role = document.getElementById('signup-role')?.value;
+  const button = e.target.querySelector('button[type="submit"]');
+
+  if (!username || !email || !password) {
+    showToast('Please fill in all required fields', 'error');
+    return;
+  }
+
+  if (username.length < 3) {
+    showToast('Username must be at least 3 characters long', 'error');
+    return;
+  }
+
+  if (password.length < 6) {
+    showToast('Password must be at least 6 characters long', 'error');
+    return;
+  }
+
+  if (button) {
+    button.disabled = true;
+    button.textContent = 'Creating Account...';
+  }
+
+  try {
+    const res = await fetch('/api/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        username,
+        email,
+        password,
+        first_name,
+        last_name,
+        role
+      })
+    });
+
+    const data = await res.json();
+
+    if (res.ok && data.token) {
+      authToken = data.token;
+      localStorage.setItem('authToken', authToken);
+      currentUser = data.user || { username, first_name, last_name, role };
+      showToast('🎉 Account created successfully!', 'success');
+      
+      await loadCurrentUser();
+      
+      setTimeout(() => showAppPage(), 800);
+    } else {
+      showToast('❌ ' + (data.message || 'Registration failed'), 'error');
+    }
+  } catch (err) {
+    console.error('Registration error:', err);
+    showToast('❌ Registration error: ' + err.message, 'error');
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.textContent = 'Create Account';
+    }
+  }
+}
+
+async function loadCurrentUser() {
+  if (!authToken) return;
+  
+  try {
+    const res = await fetch('/api/auth/me', {
+      headers: {
+        'Authorization': `Bearer ${authToken}`
+      }
+    });
+    
+    const data = await res.json();
+    if (res.ok && data.success) {
+      currentUser = data.data;
+      updateSidebarUser();
+    } else {
+      console.warn('Failed to load user session, logging out.');
+      logout();
+    }
+  } catch (err) {
+    console.error('Error fetching current user info:', err);
+  }
+}
+
+function updateSidebarUser() {
+  if (!currentUser) return;
+  
+  const avatarEl = document.getElementById('sidebar-user-avatar');
+  const nameEl = document.getElementById('sidebar-user-name');
+  const roleEl = document.getElementById('sidebar-user-role');
+  
+  const name = currentUser.first_name 
+    ? `${currentUser.first_name} ${currentUser.last_name || ''}`.trim()
+    : currentUser.username;
+    
+  if (nameEl) nameEl.textContent = name;
+  if (roleEl) roleEl.textContent = currentUser.role || 'Employee';
+  if (avatarEl) {
+    avatarEl.textContent = name.charAt(0).toUpperCase();
+  }
+}
+
+function logout() {
+  authToken = null;
+  currentUser = null;
+  localStorage.removeItem('authToken');
+  stopNotificationPolling();
+  showToast('Logged out', 'info');
+  showLoginPage();
+}
+
 function navigate(page) {
   currentPage = page;
   // Update sidebar active state
@@ -46,8 +332,15 @@ function renderPage(page) {
     case 'deals':      renderDeals(content); break;
     case 'tasks':      renderTasks(content); break;
     case 'activities': renderActivities(content); break;
+    case 'lead-detail': renderLeadDetail(content, window.currentDetailId); break;
+    case 'contact-detail': renderContactDetail(content, window.currentDetailId); break;
     default:           renderDashboard(content);
   }
+}
+
+function viewDetail(module, id) {
+  window.currentDetailId = id;
+  navigate(`${module}-detail`);
 }
 
 // ============================================================
@@ -61,19 +354,22 @@ function toggleSidebar() {
 // GLOBAL SEARCH
 // ============================================================
 let searchDebounce = null;
-document.getElementById('global-search').addEventListener('input', e => {
-  clearTimeout(searchDebounce);
-  searchDebounce = setTimeout(() => {
-    const term = e.target.value.trim();
-    if (!term) return;
-    // Navigate to leads and search there
-    navigate('leads');
-    setTimeout(() => {
-      const si = document.getElementById('lead-search');
-      if (si) { si.value = term; si.dispatchEvent(new Event('input')); }
-    }, 100);
-  }, 400);
-});
+function initGlobalSearch() {
+  const searchEl = document.getElementById('global-search');
+  if (!searchEl) return;
+  searchEl.addEventListener('input', e => {
+    clearTimeout(searchDebounce);
+    searchDebounce = setTimeout(() => {
+      const term = e.target.value.trim();
+      if (!term) return;
+      navigate('leads');
+      setTimeout(() => {
+        const si = document.getElementById('lead-search');
+        if (si) { si.value = term; si.dispatchEvent(new Event('input')); }
+      }, 100);
+    }, 400);
+  });
+}
 
 // ============================================================
 // QUICK ADD
@@ -153,10 +449,29 @@ function activityIcon(type) {
 }
 
 async function apiFetch(url, opts = {}) {
+  const headers = {
+    'Content-Type': 'application/json',
+    ...opts.headers
+  };
+  
+  // Add Authorization header if token exists
+  if (authToken) {
+    headers['Authorization'] = `Bearer ${authToken}`;
+  }
+  
   const res = await fetch(url, {
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     ...opts
   });
+  
+  // If unauthorized, redirect to login
+  if (res.status === 401) {
+    authToken = null;
+    localStorage.removeItem('authToken');
+    showLoginPage();
+    throw new Error('Authentication required');
+  }
+  
   return res.json();
 }
 
@@ -165,11 +480,22 @@ async function apiFetch(url, opts = {}) {
 // ============================================================
 function showToast(msg, type = 'info') {
   const icons = { success: '✅', error: '❌', info: 'ℹ️' };
+  const container = document.getElementById('toast-container');
+  
+  if (!container) {
+    console.warn('Toast container not found, showing alert instead:', msg);
+    alert(msg);
+    return;
+  }
+  
   const t = document.createElement('div');
   t.className = `toast ${type}`;
   t.innerHTML = `<span>${icons[type]}</span><span>${esc(msg)}</span>`;
-  document.getElementById('toast-container').appendChild(t);
-  setTimeout(() => t.remove(), 3200);
+  container.appendChild(t);
+  
+  setTimeout(() => {
+    if (t.parentNode) t.remove();
+  }, 3200);
 }
 
 // ============================================================
@@ -238,11 +564,12 @@ function exportCSV(data, filename) {
 // ============================================================
 // ============================================================
 async function renderDashboard(content) {
+  const displayName = currentUser ? (currentUser.first_name || currentUser.username) : 'Admin';
   content.innerHTML = `
     <div class="page-header">
       <div>
         <div class="page-title">📊 Dashboard</div>
-        <div class="page-subtitle">Welcome back, Admin! Here's your CRM overview.</div>
+        <div class="page-subtitle">Welcome back, ${esc(displayName)}! Here's your CRM overview.</div>
       </div>
     </div>
 
@@ -295,47 +622,69 @@ async function renderDashboard(content) {
 
   try {
     const result = await apiFetch('/api/dashboard');
-    if (!result.success) throw new Error(result.message);
-    const d = result.data;
+    
+    // Validate response
+    if (!result || typeof result !== 'object') {
+      throw new Error('Invalid API response');
+    }
+    
+    if (!result.success && result.success !== undefined) {
+      throw new Error(result.message || 'Dashboard load failed');
+    }
+    
+    const d = result.data || {};
+    
+    // Provide defaults for all data properties
+    const data = {
+      totalLeads: d.totalLeads || 0,
+      totalContacts: d.totalContacts || 0,
+      totalDeals: d.totalDeals || 0,
+      pendingTasks: d.pendingTasks || 0,
+      totalUsers: d.totalUsers || 0,
+      totalRevenue: d.totalRevenue || 0,
+      monthlyRevenue: d.monthlyRevenue || 0,
+      pipelineValue: d.pipelineValue || 0,
+      conversionRate: d.conversionRate || '0%',
+      myStats: d.myStats || {},
+      leadsByStatus: Array.isArray(d.leadsByStatus) ? d.leadsByStatus : [],
+      dealsByStage: Array.isArray(d.dealsByStage) ? d.dealsByStage : [],
+      activities: Array.isArray(d.activities) ? d.activities : [],
+      tasksDueToday: Array.isArray(d.tasksDueToday) ? d.tasksDueToday : [],
+      overdueTasks: Array.isArray(d.overdueTasks) ? d.overdueTasks : [],
+      monthlyLeads: Array.isArray(d.monthlyLeads) ? d.monthlyLeads : [],
+      topUsers: Array.isArray(d.topUsers) ? d.topUsers : []
+    };
 
     // Stats
     document.getElementById('dash-stats').innerHTML = `
       <div class="stat-card blue">
         <div class="stat-icon blue">🎯</div>
-        <div><div class="stat-val">${d.totalLeads}</div><div class="stat-lbl">Total Leads</div></div>
-      </div>
-      <div class="stat-card green">
-        <div class="stat-icon green">👥</div>
-        <div><div class="stat-val">${d.totalContacts}</div><div class="stat-lbl">Contacts</div></div>
-      </div>
-      <div class="stat-card amber">
-        <div class="stat-icon amber">💰</div>
-        <div><div class="stat-val">${d.totalDeals}</div><div class="stat-lbl">Deals</div></div>
-      </div>
-      <div class="stat-card red">
-        <div class="stat-icon red">✅</div>
-        <div><div class="stat-val">${d.pendingTasks}</div><div class="stat-lbl">Pending Tasks</div></div>
+        <div><div class="stat-val">${data.totalLeads}</div><div class="stat-lbl">Total Leads</div></div>
       </div>
       <div class="stat-card green">
         <div class="stat-icon green">🏆</div>
-        <div><div class="stat-val">${fmtMoney(d.totalRevenue)}</div><div class="stat-lbl">Revenue Won</div></div>
+        <div><div class="stat-val">${fmtMoney(data.totalRevenue)}</div><div class="stat-lbl">Revenue Won</div></div>
       </div>
-      <div class="stat-card cyan">
-        <div class="stat-icon cyan">📊</div>
-        <div><div class="stat-val">${fmtMoney(d.pipelineValue)}</div><div class="stat-lbl">Pipeline</div></div>
+      <div class="stat-card amber">
+        <div class="stat-icon amber">💰</div>
+        <div><div class="stat-val">${data.totalDeals}</div><div class="stat-lbl">Open Deals</div></div>
+      </div>
+      <div class="stat-card red">
+        <div class="stat-icon red">✅</div>
+        <div><div class="stat-val">${data.pendingTasks}</div><div class="stat-lbl">Tasks Due</div></div>
       </div>
     `;
 
     // Chart: Monthly leads
     const mCtx = document.getElementById('chart-monthly');
-    if (mCtx) {
+    if (mCtx && data.monthlyLeads && data.monthlyLeads.length) {
       chartInstances.monthly = new Chart(mCtx, {
         type: 'bar',
         data: {
-          labels: d.monthlyLeads.map(r => r.month),
+          labels: data.monthlyLeads.map(r => r.month),
           datasets: [{
             label: 'Leads',
-            data: d.monthlyLeads.map(r => r.count),
+            data: data.monthlyLeads.map(r => r.count),
             backgroundColor: 'rgba(79,124,255,0.7)',
             borderRadius: 6,
             borderColor: '#4f7cff',
@@ -348,13 +697,13 @@ async function renderDashboard(content) {
 
     // Chart: Lead status donut
     const lCtx = document.getElementById('chart-leads');
-    if (lCtx && d.leadsByStatus.length) {
+    if (lCtx && data.leadsByStatus && data.leadsByStatus.length) {
       chartInstances.leads = new Chart(lCtx, {
         type: 'doughnut',
         data: {
-          labels: d.leadsByStatus.map(r => r.status),
+          labels: data.leadsByStatus.map(r => r.status),
           datasets: [{
-            data: d.leadsByStatus.map(r => r.count),
+            data: data.leadsByStatus.map(r => r.count),
             backgroundColor: ['#4f7cff','#06b6d4','#8b6bff','#f59e0b','#22c55e','#ef4444'],
             borderWidth: 0, hoverOffset: 6
           }]
@@ -372,15 +721,15 @@ async function renderDashboard(content) {
 
     // Chart: Deals pipeline bar
     const dCtx = document.getElementById('chart-deals');
-    if (dCtx && d.dealsByStage.length) {
+    if (dCtx && data.dealsByStage && data.dealsByStage.length) {
       chartInstances.deals = new Chart(dCtx, {
         type: 'bar',
         data: {
-          labels: d.dealsByStage.map(r => r.stage),
+          labels: data.dealsByStage.map(r => r.stage),
           datasets: [{
             label: 'Deals',
-            data: d.dealsByStage.map(r => r.count),
-            backgroundColor: d.dealsByStage.map(r => stageColor(r.stage) + 'cc'),
+            data: data.dealsByStage.map(r => r.count),
+            backgroundColor: data.dealsByStage.map(r => stageColor(r.stage) + 'cc'),
             borderRadius: 6, borderWidth: 0
           }]
         },
@@ -392,9 +741,9 @@ async function renderDashboard(content) {
 
     // Recent activity
     const actEl = document.getElementById('dash-activity');
-    if (d.activities.length) {
+    if (data.activities && data.activities.length) {
       actEl.innerHTML = `<div class="activity-feed">
-        ${d.activities.map(a => `
+        ${data.activities.map(a => `
           <div class="activity-item">
             <div class="activity-dot">${activityIcon(a.type)}</div>
             <div>
@@ -410,8 +759,8 @@ async function renderDashboard(content) {
 
     // Tasks due today
     const taskEl = document.getElementById('dash-tasks');
-    if (d.tasksDueToday.length) {
-      taskEl.innerHTML = d.tasksDueToday.map(t => `
+    if (data.tasksDueToday && data.tasksDueToday.length) {
+      taskEl.innerHTML = data.tasksDueToday.map(t => `
         <div style="display:flex;align-items:center;gap:14px;padding:10px 0;border-bottom:1px solid var(--border)">
           <span style="font-size:1.1rem">${t.priority === 'High' ? '🔴' : t.priority === 'Medium' ? '🟡' : '🟢'}</span>
           <div style="flex:1">
@@ -536,7 +885,9 @@ async function loadLeads() {
     tbody.innerHTML = leadsData.map((l, i) => `
       <tr>
         <td class="td-id">${i + 1}</td>
-        <td class="td-name">${esc(l.name)}</td>
+        <td class="td-name">
+          <a href="javascript:void(0)" class="td-link" onclick="viewDetail('lead', ${l.id})">${esc(l.name)}</a>
+        </td>
         <td>${esc(l.phone) || '—'}</td>
         <td>${esc(l.email) || '—'}</td>
         <td>${esc(l.company) || '—'}</td>
@@ -718,7 +1069,9 @@ async function loadContacts() {
     tbody.innerHTML = contactsData.map((c, i) => `
       <tr>
         <td class="td-id">${i + 1}</td>
-        <td class="td-name">${esc(c.name)}</td>
+        <td class="td-name">
+          <a href="javascript:void(0)" class="td-link" onclick="viewDetail('contact', ${c.id})">${esc(c.name)}</a>
+        </td>
         <td><span style="font-size:.8rem;color:var(--text3)">${esc(c.title) || '—'}</span></td>
         <td>${esc(c.phone) || '—'}</td>
         <td>${esc(c.email) || '—'}</td>
@@ -885,26 +1238,29 @@ async function loadDeals() {
       if (!colEl) return;
 
       if (!cards.length) {
-        colEl.innerHTML = `<div style="text-align:center;padding:20px;color:var(--text3);font-size:.78rem;border:1px dashed var(--border);border-radius:8px">No deals</div>`;
+        colEl.innerHTML = `<div style="text-align:center;padding:20px;color:var(--text3);font-size:.78rem;border:1px dashed var(--border);border-radius:12px">No deals</div>`;
       } else {
         colEl.innerHTML = cards.map(d => `
-          <div class="deal-card" ondblclick="openDealModal(${d.id})">
+          <div class="deal-card" onclick="openDealModal(${d.id})">
             <div class="deal-card-title">${esc(d.title)}</div>
             <div class="deal-card-contact">👤 ${esc(d.contact_name) || 'No contact'}</div>
-            <div class="deal-card-footer">
-              <div>
-                <div class="deal-card-value">${fmtMoney(d.value)}</div>
-                <div class="deal-card-prob">${d.probability}% probability</div>
-                <div class="prob-bar" style="width:100px">
+            <div style="margin-bottom:10px">
+               <div style="display:flex;justify-content:space-between;font-size:.75rem;margin-bottom:4px">
+                  <span style="color:var(--text2)">Probability</span>
+                  <span style="font-weight:700;color:${probColor(d.probability)}">${d.probability}%</span>
+               </div>
+               <div class="prob-bar">
                   <div class="prob-fill" style="width:${d.probability}%;background:${probColor(d.probability)}"></div>
-                </div>
-              </div>
+               </div>
+            </div>
+            <div class="deal-card-footer">
+              <div class="deal-card-value">${fmtMoney(d.value)}</div>
               <div class="deal-card-actions">
-                <button class="row-btn edit" onclick="openDealModal(${d.id})" title="Edit">✏️</button>
-                <button class="row-btn del" onclick="deleteDeal(${d.id},'${esc(d.title)}')" title="Delete">🗑️</button>
+                <button class="row-btn edit" onclick="event.stopPropagation();openDealModal(${d.id})">✏️</button>
+                <button class="row-btn del" onclick="event.stopPropagation();deleteDeal(${d.id},'${esc(d.title)}')">🗑️</button>
               </div>
             </div>
-            ${d.close_date ? `<div style="font-size:.72rem;color:var(--text3);margin-top:8px">📅 Close: ${fmtDate(d.close_date)}</div>` : ''}
+            ${d.close_date ? `<div style="font-size:.7rem;color:var(--text3);margin-top:8px">📅 Exp. Close: ${fmtDate(d.close_date)}</div>` : ''}
           </div>
         `).join('');
       }
@@ -1275,8 +1631,336 @@ async function submitActivity(e) {
 }
 
 // ============================================================
+//  NOTIFICATIONS
+// ============================================================
+function toggleNotificationPanel() {
+  const panel = document.getElementById('notification-panel');
+  notificationPanelOpen = !notificationPanelOpen;
+  if (notificationPanelOpen) {
+    panel.style.display = 'block';
+    loadNotifications();
+  } else {
+    panel.style.display = 'none';
+  }
+}
+
+async function loadNotifications() {
+  try {
+    const r = await apiFetch('/api/notifications');
+    if (!r.success) throw new Error(r.message);
+    
+    notifications = r.data || [];
+    const unreadCount = notifications.filter(n => !n.is_read).length;
+    
+    // Update badge
+    const badge = document.getElementById('notif-badge');
+    if (unreadCount > 0) {
+      badge.textContent = unreadCount;
+      badge.style.display = 'flex';
+    } else {
+      badge.style.display = 'none';
+    }
+    
+    // Render notifications
+    renderNotificationsList();
+  } catch (err) {
+    console.error('Failed to load notifications:', err);
+  }
+}
+
+function renderNotificationsList() {
+  const list = document.getElementById('notification-list');
+  if (!notifications || notifications.length === 0) {
+    list.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--text3);">No notifications</div>';
+    return;
+  }
+  
+  list.innerHTML = notifications.map(n => {
+    const icon = getNotificationIcon(n.type);
+    const timeAgo = formatTimeAgo(n.created_at);
+    const unreadClass = !n.is_read ? 'unread' : '';
+    
+    return `
+      <div class="notification-item ${unreadClass}" onclick="markNotificationAsReadUI(${n.id})">
+        <div class="notification-content">
+          <div class="notification-title">
+            <span class="notification-icon">${icon}</span>
+            ${esc(n.title || 'Notification')}
+          </div>
+          <div class="notification-message">${esc(n.message || '')}</div>
+          <div class="notification-time">${timeAgo}</div>
+        </div>
+        <div class="notification-actions">
+          <button class="notification-delete" onclick="deleteNotificationUI(event, ${n.id})" title="Delete">✕</button>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function getNotificationIcon(type) {
+  const icons = {
+    'lead_assigned': '🎯',
+    'task_deadline': '⏰',
+    'deal_updated': '💰',
+    'comment': '💬',
+    'system': 'ℹ️'
+  };
+  return icons[type] || '🔔';
+}
+
+function formatTimeAgo(dateStr) {
+  const date = new Date(dateStr);
+  const now = new Date();
+  const seconds = Math.floor((now - date) / 1000);
+  
+  if (seconds < 60) return 'Just now';
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
+  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
+  return `${Math.floor(seconds / 86400)}d ago`;
+}
+
+async function markNotificationAsReadUI(notifId) {
+  try {
+    const r = await apiFetch(`/api/notifications/${notifId}/read`, { method: 'PUT' });
+    if (!r.success) throw new Error(r.message);
+    await loadNotifications();
+  } catch (err) {
+    console.error('Failed to mark notification as read:', err);
+  }
+}
+
+async function deleteNotificationUI(event, notifId) {
+  event.stopPropagation();
+  try {
+    const r = await apiFetch(`/api/notifications/${notifId}`, { method: 'DELETE' });
+    if (!r.success) throw new Error(r.message);
+    await loadNotifications();
+  } catch (err) {
+    console.error('Failed to delete notification:', err);
+  }
+}
+
+async function markAllNotificationsAsRead() {
+  try {
+    const r = await apiFetch('/api/notifications/all/read', { method: 'PUT' });
+    if (!r.success) throw new Error(r.message);
+    await loadNotifications();
+    showToast('All notifications marked as read', 'success');
+  } catch (err) {
+    console.error('Failed to mark all as read:', err);
+  }
+}
+
+function startNotificationPolling() {
+  if (notificationCheckInterval) clearInterval(notificationCheckInterval);
+  loadNotifications();
+  notificationCheckInterval = setInterval(() => {
+    loadNotifications();
+  }, 30000); // Check every 30 seconds
+}
+
+function stopNotificationPolling() {
+  if (notificationCheckInterval) {
+    clearInterval(notificationCheckInterval);
+    notificationCheckInterval = null;
+  }
+}
+
+// ============================================================
+//  7. DETAIL VIEWS (LEADS & CONTACTS)
+// ============================================================
+async function renderLeadDetail(content, id) {
+  if (!id) return navigate('leads');
+  content.innerHTML = `<div style="text-align:center;padding:100px"><div class="spinner"></div></div>`;
+
+  try {
+    const r = await apiFetch(`/api/leads/${id}`);
+    if (!r.success) throw new Error(r.message);
+    const l = r.data.lead;
+
+    content.innerHTML = `
+      <div class="page-header">
+        <div>
+          <div class="page-subtitle"><a href="javascript:void(0)" onclick="navigate('leads')" style="color:var(--blue)">← Back to Leads</a></div>
+          <div class="page-title">${esc(l.name)}</div>
+        </div>
+        <div style="display:flex;gap:10px">
+          <button class="btn btn-outline btn-sm" onclick="openLeadModal(${l.id})">✏️ Edit</button>
+          <button class="btn btn-primary btn-sm" onclick="openLogActivity()">＋ Log Activity</button>
+        </div>
+      </div>
+
+      <div class="detail-view">
+        <div class="detail-sidebar">
+          <div class="profile-card">
+            <div class="profile-avatar">${l.name.charAt(0)}</div>
+            <div class="profile-name">${esc(l.name)}</div>
+            <div class="profile-company">${esc(l.company) || 'No Company'}</div>
+            <span class="${badgeClass(l.status)}">${l.status}</span>
+          </div>
+
+          <div class="panel">
+            <div class="panel-header"><div class="panel-title">Contact Info</div></div>
+            <div class="panel-body">
+              <div class="info-grid">
+                <div class="info-item"><div class="info-label">Email</div><div class="info-val">${esc(l.email) || '—'}</div></div>
+                <div class="info-item"><div class="info-label">Phone</div><div class="info-val">${esc(l.phone) || '—'}</div></div>
+                <div class="info-item"><div class="info-label">Source</div><div class="info-val">${esc(l.source) || '—'}</div></div>
+                <div class="info-item"><div class="info-label">Created</div><div class="info-val">${fmtDate(l.created_at)}</div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="detail-main">
+          <div class="panel">
+            <div class="panel-header"><div class="panel-title">📝 Notes</div></div>
+            <div class="panel-body">
+              <p style="font-size:.9rem;color:var(--text2);line-height:1.6">${esc(l.notes) || 'No notes added yet.'}</p>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-header"><div class="panel-title">🕐 Activity Timeline</div></div>
+            <div class="panel-body" id="lead-timeline">
+              <div class="spinner"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+
+    loadDetailTimeline('leads', id, 'lead-timeline');
+  } catch (err) {
+    content.innerHTML = `<div class="empty-state"><h3>Lead not found</h3><button class="btn btn-primary" onclick="navigate('leads')">Back</button></div>`;
+  }
+}
+
+async function renderContactDetail(content, id) {
+  if (!id) return navigate('contacts');
+  content.innerHTML = `<div style="text-align:center;padding:100px"><div class="spinner"></div></div>`;
+
+  try {
+    const r = await apiFetch(`/api/contacts/${id}`);
+    if (!r.success) throw new Error(r.message);
+    const c = r.data;
+
+    content.innerHTML = `
+      <div class="page-header">
+        <div>
+          <div class="page-subtitle"><a href="javascript:void(0)" onclick="navigate('contacts')" style="color:var(--blue)">← Back to Contacts</a></div>
+          <div class="page-title">${esc(c.name)}</div>
+        </div>
+        <div style="display:flex;gap:10px">
+          <button class="btn btn-outline btn-sm" onclick="openContactModal(${c.id})">✏️ Edit</button>
+          <button class="btn btn-primary btn-sm" onclick="openLogActivity()">＋ Log Activity</button>
+        </div>
+      </div>
+
+      <div class="detail-view">
+        <div class="detail-sidebar">
+          <div class="profile-card">
+            <div class="profile-avatar" style="background:var(--purple)">${c.name.charAt(0)}</div>
+            <div class="profile-name">${esc(c.name)}</div>
+            <div class="profile-company">${esc(c.title) || 'Contact'} at ${esc(c.company) || '—'}</div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-header"><div class="panel-title">Contact Details</div></div>
+            <div class="panel-body">
+              <div class="info-grid">
+                <div class="info-item"><div class="info-label">Email</div><div class="info-val">${esc(c.email) || '—'}</div></div>
+                <div class="info-item"><div class="info-label">Phone</div><div class="info-val">${esc(c.phone) || '—'}</div></div>
+                <div class="info-item"><div class="info-label">Address</div><div class="info-val">${esc(c.address) || '—'}</div></div>
+                <div class="info-item"><div class="info-label">Member Since</div><div class="info-val">${fmtDate(c.created_at)}</div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="detail-main">
+          <div class="panel">
+            <div class="panel-header"><div class="panel-title">🕐 Activity Timeline</div></div>
+            <div class="panel-body" id="contact-timeline">
+              <div class="spinner"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+
+    loadDetailTimeline('contacts', id, 'contact-timeline');
+  } catch (err) {
+    content.innerHTML = `<div class="empty-state"><h3>Contact not found</h3><button class="btn btn-primary" onclick="navigate('contacts')">Back</button></div>`;
+  }
+}
+
+async function loadDetailTimeline(module, id, elId) {
+  try {
+    // We use dashboard/activity but filtered or leads logic
+    // For now, let's fetch all activity and filter by module/id in JS (simple way)
+    const result = await apiFetch('/api/dashboard');
+    const el = document.getElementById(elId);
+    if (!el) return;
+
+    const list = result.data.activities.filter(a => a.module === module && a.module_id == id);
+
+    if (!list.length) {
+      el.innerHTML = '<div style="text-align:center;color:var(--text3);padding:20px;font-size:.85rem">No activities recorded for this record.</div>';
+      return;
+    }
+
+    el.innerHTML = `<div class="timeline">
+      ${list.map(a => `
+        <div class="timeline-item">
+          <div class="timeline-dot"></div>
+          <div class="timeline-content">
+            <div class="timeline-header">
+              <div class="timeline-type">${a.type}</div>
+              <div class="timeline-date">${timeAgo(a.created_at)}</div>
+            </div>
+            <div class="timeline-desc">${esc(a.description)}</div>
+          </div>
+        </div>
+      `).join('')}
+    </div>`;
+  } catch (e) {
+    document.getElementById(elId).innerHTML = 'Error loading timeline';
+  }
+}
+
+// ============================================================
 // BOOT
 // ============================================================
-document.addEventListener('DOMContentLoaded', () => {
-  navigate('dashboard');
+document.addEventListener('click', (e) => {
+  const notifContainer = document.querySelector('.notif-bell-container');
+  const notifPanel = document.getElementById('notification-panel');
+  
+  if (notifPanel && notifPanel.style.display !== 'none') {
+    if (!notifContainer || !notifContainer.contains(e.target)) {
+      notificationPanelOpen = false;
+      notifPanel.style.display = 'none';
+    }
+  }
+});
+
+document.addEventListener('DOMContentLoaded', async () => {
+  console.log('App initializing...');
+  
+  // Check if logged in
+  authToken = localStorage.getItem('authToken');
+  console.log('Auth token found:', !!authToken);
+  
+  if (authToken) {
+    console.log('Loading user session...');
+    await loadCurrentUser();
+    console.log('Showing app page (logged in)');
+    showAppPage();
+  } else {
+    console.log('Showing login page');
+    showLoginPage();
+  }
+  
+  console.log('App initialized');
 });
