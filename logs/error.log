@@ -78,3 +78,4 @@
 {"level":"error","message":"Count deals query failed:","service":"crm-api","timestamp":"2026-05-26 23:00:51"}
 {"level":"error","message":"Activity logging failed:","service":"crm-api","timestamp":"2026-05-26 23:00:54"}
 {"level":"error","message":"Count deals query failed:","service":"crm-api","timestamp":"2026-05-26 23:00:54"}
+{"level":"error","message":"Activity logging failed:","service":"crm-api","timestamp":"2026-05-26 23:06:25"}
